@@ -1,4 +1,4 @@
-package com.ido;
+package hss.isis.rds.dao.jdbc;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -40,13 +40,14 @@ public class ArrowJson {
 			return sb.toString();
 		}
 		
-		return getObjectJson(obj);
+		return OBJECT_START+getObjectJson(obj)+OBJECT_END;
 	}
 
 	private static String getObjectJson(Object obj)
 			throws IllegalAccessException {
 		Class clz = obj.getClass();
 		StringBuffer sb = new StringBuffer();
+		appendQuotation(sb, clz.getSimpleName()).append(COLON);
 		sb.append(OBJECT_START).append("\n");
 		Field[] allFileds = clz.getDeclaredFields();
 		for (Field f : allFileds) {
@@ -60,7 +61,6 @@ public class ArrowJson {
 				appendQuotation(sb, f.getName()).append(COLON).append(val)
 						.append(COMMA);
 			}else {
-				appendQuotation(sb, f.getName()).append(COLON);
 				sb.append((getObjectJson(val))).append(COMMA);
 			}
 		}
@@ -95,7 +95,7 @@ public class ArrowJson {
 		String name;
 	}
 
-//	@Test
+	@Test
 	public void testSingalObject() throws IllegalArgumentException, IllegalAccessException {
 		Person p = new Person();
 		p.age = 10;
@@ -119,7 +119,7 @@ public class ArrowJson {
 		println(ArrowJson.toJson(persons));
 	}
 	
-	@Test
+//	@Test
 	public void testList() throws IllegalArgumentException, IllegalAccessException{
 		ArrayList<Person> list = new ArrayList<Person>(10);
 		for(int j = 0 ; j< 10; j++){
