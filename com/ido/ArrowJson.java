@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.Test;
-
 public class ArrowJson {
 	private static String ARRAY_START = "[";
 	private static String ARRAY_END = "]";
@@ -103,8 +102,10 @@ public class ArrowJson {
 	 */
 	public static <T> T jsonToObject(Class<T> clz,String jsonString) throws InstantiationException, IllegalAccessException{
 		T result = clz.newInstance();
+		Lexemer lexemer = new Lexemer();
 		for(;;){
-			Token token = Lexemer.getToken(jsonString);
+			
+			Token token = lexemer.getToken(jsonString);
 			if(token.type == TokenType.ID ){
 				return null;
 			}
@@ -116,19 +117,26 @@ public class ArrowJson {
 	}
 	
 	private static class Lexemer{
-		private StringBuffer sb = new StringBuffer();
+		private StringBuilder sb = new StringBuilder();
 		private static final byte BRACE_START = '{';
+		private static final byte BRACE_END = '}';
+		private static final byte BRACKET_START = '[';
+		private static final byte BRACKET_END = ']';
+		private static final byte QUOTE = '"';
+		private static final byte COLON = ':';
 		private static int temp = 0;
+		private static int curentIndex = 0;
 		
-		public static Token getToken(String jsonStream){
+		
+		public  Token getToken(String jsonStream){
 			if(jsonStream == null || jsonStream == ""){
 				return null;
 			}
 			char[] ins = jsonStream.toCharArray();
-			for(int i = 0; i< ins.length ; i++){
+			for(; curentIndex< ins.length ; curentIndex++){
 				
 				
-				char current = ins[i] ;
+				char current = ins[curentIndex] ;
 				if(current == ' ' || current == '\t' || current == '\n' ){
 					continue;
 				}
@@ -136,8 +144,27 @@ public class ArrowJson {
 				if(Character.isDigit(current)){
 					do{
 						temp = temp*10 + current;
-						current = ins[++i] ;
+						current = ins[++curentIndex] ;
 					}while(Character.isDigit(current));
+					temp = 0;
+					
+					return new Token(TokenType.ID,temp);
+				}
+				
+				if(current == BRACE_START ||current == BRACE_END||current == QUOTE || current == BRACKET_START ||current == BRACKET_END||current == COLON  ){
+					curentIndex++;
+					return new Token(TokenType.Keyword,current);
+				}
+				
+				if(Character.isLetter(current)){
+					do{
+						sb.append(current);
+						current = ins[++curentIndex] ;
+					}while(Character.isLetter(current));
+					String outString = sb.toString();
+					sb = new StringBuilder();
+					return new Token(TokenType.ID,outString);
+					
 				}
 				
 			}
@@ -150,16 +177,53 @@ public class ArrowJson {
 	private static class Token{
 		 TokenType type;
 		 Object val;
+		public Token(TokenType type, Object val) {
+			super();
+			this.type = type;
+			this.val = val;
+		}
+		 
+		 
 		
 	}
 	
 	private  enum TokenType{
-		Keyword,ID
+		Keyword("keyword"),ID("identity");
+		
+		private String description;
+
+		private TokenType(String description) {
+			this.description = description;
+		}
+
+		public String getDescription() {
+			return description;
+		}
+
+		
+		
+		
+		
 	}
 
 	private static class Person {
 		int age;
 		String name;
+	}
+	
+	
+	@Test
+	public void testLexer(){
+		Lexemer lexemer = new Lexemer();
+		String s = "{\"name\" : \"ido\"}"; 
+		while(true){
+			Token token = lexemer.getToken(s);
+			if(token == null){
+				return;
+			}
+			String put = "Token type : "+token.type.getDescription()+", Token value " +String.valueOf(token.val);
+			System.out.println( put);
+		}
 	}
 
 //	@Test
@@ -212,7 +276,7 @@ public class ArrowJson {
 		Address address;
 	}
 	
-	@Test
+//	@Test
 	public void testOjectNested() throws IllegalArgumentException, IllegalAccessException{
 		Department department = new Department();
 		department.person = new Person();
