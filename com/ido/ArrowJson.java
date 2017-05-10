@@ -11,7 +11,15 @@ public class ArrowJson {
 	private static String OBJECT_END = "}";
 	private static String OBJECT_START = "{";
 	private static String COMMA = ",";
-	private static String COLON = ":";
+	private static String COLON_S = ":";
+	
+	private static final char BRACE_START = '{';
+	private static final char BRACE_END = '}';
+	private static final char BRACKET_START = '[';
+	private static final char BRACKET_END = ']';
+	private static final char QUOTE = '"';
+	private static final char SINGLE_QUOTE = '\'';
+	private static final char COLON = ':';
 	
 	static public String toJson(Object obj) throws IllegalArgumentException,
 			IllegalAccessException {
@@ -46,7 +54,7 @@ public class ArrowJson {
 			throws IllegalAccessException {
 		Class clz = obj.getClass();
 		StringBuffer sb = new StringBuffer();
-		appendQuotation(sb, clz.getSimpleName()).append(COLON);
+		appendQuotation(sb, clz.getSimpleName()).append(COLON_S);
 		sb.append(OBJECT_START).append("\n");
 		Field[] allFileds = clz.getDeclaredFields();
 		for (Field f : allFileds) {
@@ -57,10 +65,10 @@ public class ArrowJson {
 			}
 			
 			if (val instanceof String) {
-				appendQuotation(appendQuotation(sb, f.getName()).append(COLON),
+				appendQuotation(appendQuotation(sb, f.getName()).append(COLON_S),
 						(String) val).append(COMMA);
 			} else if ( val instanceof Number) {
-				appendQuotation(sb, f.getName()).append(COLON).append(val)
+				appendQuotation(sb, f.getName()).append(COLON_S).append(val)
 						.append(COMMA);
 			}else {
 				sb.append((getObjectJson(val))).append(COMMA);
@@ -102,40 +110,77 @@ public class ArrowJson {
 	 */
 	public static <T> T jsonToObject(Class<T> clz,String jsonString) throws InstantiationException, IllegalAccessException{
 		T result = clz.newInstance();
-		Lexemer lexemer = new Lexemer();
-		for(;;){
-			
-			Token token = lexemer.getToken(jsonString);
-			if(token.type == TokenType.ID ){
-				return null;
-			}
-		}
+		
+		Parser parser = new Parser(jsonString.toCharArray());
+		char[] ins = jsonString.toCharArray();
+		return result;
+		
 	}
 	
 	private static class Parser{
+		private static Token look_ahead = null;
+		private char[] jsonChars;
+		Lexemer lexemer;
+		
+		public Parser(char[] jsonChars) {
+			super();
+			this.jsonChars = jsonChars;
+			lexemer = new Lexemer();
+		}
+
+		public void Object(){
+			for(;;){
+				getNextToken();
+				expect(BRACE_START);expect(BRACE_END);
+				
+			}
+		}
+		
+		public void Array(){
+			for(;;){
+				getNextToken();
+				expect(BRACKET_START);expect(BRACKET_END);
+			}
+		}
+		
+		public void Identity(){
+			for(;;){
+				getNextToken();
+				expect(QUOTE);expect(QUOTE);
+			}
+		}
+		
+		
+		private void expect(char ch){
+			if(ch  != (char)look_ahead.val ){
+				throw new RuntimeException("syntax error : expecte char : "+ BRACE_START);
+			}
+			
+		}
+		
+		private void getNextToken(){
+			look_ahead = lexemer.getToken(jsonChars);
+		}
+		
 		
 	}
 	
 	private static class Lexemer{
 		private StringBuilder sb = new StringBuilder();
-		private static final byte BRACE_START = '{';
-		private static final byte BRACE_END = '}';
-		private static final byte BRACKET_START = '[';
-		private static final byte BRACKET_END = ']';
-		private static final byte QUOTE = '"';
-		private static final byte COLON = ':';
+		
 		private static int temp = 0;
 		private static int curentIndex = 0;
 		
-		
-		public  Token getToken(String jsonStream){
-			if(jsonStream == null || jsonStream == ""){
+		/**
+		 * 
+		 * @param ins : the json char array
+		 * @return the next token of the json stream
+		 */
+		public  Token getToken(char[] ins){
+			if(ins.length ==  0 ){
 				return null;
 			}
-			char[] ins = jsonStream.toCharArray();
 			for(; curentIndex< ins.length ; curentIndex++){
-				
-				
 				char current = ins[curentIndex] ;
 				if(current == ' ' || current == '\t' || current == '\n' ){
 					continue;
@@ -216,8 +261,9 @@ public class ArrowJson {
 	public void testLexer(){
 		Lexemer lexemer = new Lexemer();
 		String s = "{\"name\" : \"ido\"}"; 
+		char[] ins = s.toCharArray();
 		while(true){
-			Token token = lexemer.getToken(s);
+			Token token = lexemer.getToken(ins);
 			if(token == null){
 				return;
 			}
@@ -276,7 +322,7 @@ public class ArrowJson {
 		Address address;
 	}
 	
-//	@Test
+	@Test
 	public void testOjectNested() throws IllegalArgumentException, IllegalAccessException{
 		Department department = new Department();
 		department.person = new Person();
