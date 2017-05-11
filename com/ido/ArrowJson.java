@@ -18,7 +18,6 @@ public class ArrowJson {
 	private static final char BRACKET_START = '[';
 	private static final char BRACKET_END = ']';
 	private static final char QUOTE = '"';
-	private static final char SINGLE_QUOTE = '\'';
 	private static final char COLON = ':';
 	
 	static public String toJson(Object obj) throws IllegalArgumentException,
@@ -108,51 +107,98 @@ public class ArrowJson {
 	 * @throws InstantiationException
 	 * @throws IllegalAccessException
 	 */
+	@SuppressWarnings("unchecked")
 	public static <T> T jsonToObject(Class<T> clz,String jsonString) throws InstantiationException, IllegalAccessException{
 		T result = clz.newInstance();
 		
-		Parser parser = new Parser(jsonString.toCharArray());
+		Parser parser = new Parser(jsonString.toCharArray(),clz);
 		char[] ins = jsonString.toCharArray();
 		return result;
 		
 	}
 	
-	private static class Parser{
+	private static class Parser<T>{
 		private static Token look_ahead = null;
 		private char[] jsonChars;
 		Lexemer lexemer;
-		
-		public Parser(char[] jsonChars) {
+		private boolean isRead;
+		T  result  ;
+		Class<T> clz;
+		Field f;
+		Object val;
+		public Parser(char[] jsonChars,Class<T> clz) throws InstantiationException, IllegalAccessException {
 			super();
 			this.jsonChars = jsonChars;
 			lexemer = new Lexemer();
+			this.result =clz.newInstance();
+			this.clz = clz;
 		}
 
-		public void Object(){
-			for(;;){
-				getNextToken();
-				expect(BRACE_START);expect(BRACE_END);
-				
+		public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+			getNextToken();
+			if(look_ahead.type == TokenType.KEYWORD ){
+				switch (((Keyword)look_ahead).ch) {
+				case '{':
+					String();expect(COLON);expect(QUOTE);FieldValue();expect(QUOTE);expect(BRACE_END);
+					break;
+				default:
+					throw new RuntimeException("syntax error ");
+				}
 			}
+			
+			return result;
+			
+				
+		}
+		
+		public void String() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+			expect(QUOTE);Field();expect(QUOTE);
+//			expect(COLON);expect(QUOTE);FieldValue();expect(QUOTE);
+		}
+		
+		public void FieldValue() throws IllegalArgumentException, IllegalAccessException{
+			getNextToken();
+			if(look_ahead.type != TokenType.STR){
+				throw new RuntimeException("syntax error : expecte field name ");
+			}
+			this.val = ((Str)look_ahead).val;
+			f.setAccessible(true);
+			f.set(result, val);
+		}
+		
+		
+		public void Number(){
+			
+		}
+		
+		public void Field() throws NoSuchFieldException, SecurityException{
+			getNextToken();
+			if(look_ahead.type != TokenType.STR){
+				throw new RuntimeException("syntax error : expecte field name ");
+			}
+			
+			this.f = this.clz.getDeclaredField(((Str)look_ahead).val);
+			
 		}
 		
 		public void Array(){
 			for(;;){
-				getNextToken();
 				expect(BRACKET_START);expect(BRACKET_END);
 			}
 		}
 		
 		public void Identity(){
 			for(;;){
-				getNextToken();
 				expect(QUOTE);expect(QUOTE);
 			}
 		}
 		
 		
 		private void expect(char ch){
-			if(ch  != (char)look_ahead.val ){
+			getNextToken();
+			if(look_ahead.type == TokenType.KEYWORD && ch  == ((Keyword)look_ahead).ch ){
+				
+			}else{
 				throw new RuntimeException("syntax error : expecte char : "+ BRACE_START);
 			}
 			
@@ -160,6 +206,7 @@ public class ArrowJson {
 		
 		private void getNextToken(){
 			look_ahead = lexemer.getToken(jsonChars);
+			isRead = true;
 		}
 		
 		
@@ -193,12 +240,12 @@ public class ArrowJson {
 					}while(Character.isDigit(current));
 					temp = 0;
 					
-					return new Token(TokenType.ID,temp);
+					return new Num(TokenType.NUM,temp);
 				}
 				
 				if(current == BRACE_START ||current == BRACE_END||current == QUOTE || current == BRACKET_START ||current == BRACKET_END||current == COLON  ){
 					curentIndex++;
-					return new Token(TokenType.Keyword,current);
+					return new Keyword(TokenType.KEYWORD,current);
 				}
 				
 				if(Character.isLetter(current)){
@@ -208,7 +255,7 @@ public class ArrowJson {
 					}while(Character.isLetter(current));
 					String outString = sb.toString();
 					sb = new StringBuilder();
-					return new Token(TokenType.ID,outString);
+					return new Str(TokenType.STR,outString);
 					
 				}
 				
@@ -221,19 +268,48 @@ public class ArrowJson {
 	
 	private static class Token{
 		 TokenType type;
-		 Object val;
-		public Token(TokenType type, Object val) {
+		public Token(TokenType type) {
 			super();
 			this.type = type;
+		}
+		
+	}
+	
+	private static class Keyword extends Token{
+		private char ch;
+		public Keyword(TokenType type,char ch) {
+			super(type);
+			this.ch = ch;
+		}
+
+		
+		
+	}
+	
+	private static class Num extends Token{
+		private int val;
+
+		public Num(TokenType type,int val) {
+			super(type);
 			this.val = val;
 		}
-		 
-		 
+		
+	}
+	
+	private static class Str extends Token{
+		private String val;
+
+		public Str(TokenType type,String val) {
+			super(type);
+			this.val = val;
+		}
+
+		
 		
 	}
 	
 	private  enum TokenType{
-		Keyword("keyword"),ID("identity");
+		NUM("number"),STR("String"),KEYWORD("keyword");
 		
 		private String description;
 
@@ -256,8 +332,21 @@ public class ArrowJson {
 		String name;
 	}
 	
+	public static class Student {
+		private String name;
+	}
 	
 	@Test
+	public void testParser() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
+		String s = "{\"name\" : \"ido\"}"; 
+		char[] ins = s.toCharArray();
+		Parser<Student> parser = new Parser<>(ins, Student.class);
+		Student result = parser.Object();
+		System.out.print(result.name);
+		
+	}
+	
+//	@Test
 	public void testLexer(){
 		Lexemer lexemer = new Lexemer();
 		String s = "{\"name\" : \"ido\"}"; 
@@ -267,12 +356,12 @@ public class ArrowJson {
 			if(token == null){
 				return;
 			}
-			String put = "Token type : "+token.type.getDescription()+", Token value " +String.valueOf(token.val);
-			System.out.println( put);
+//			String put = "Token type : "+token.type.getDescription()+", Token value " +String.valueOf(token.val);
+//			System.out.println( put);
 		}
 	}
 
-//	@Test
+	@Test
 	public void testSingalObject() throws IllegalArgumentException, IllegalAccessException {
 		Person p = new Person();
 		p.age = 10;
