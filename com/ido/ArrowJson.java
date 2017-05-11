@@ -19,6 +19,9 @@ public class ArrowJson {
 	private static final char BRACKET_END = ']';
 	private static final char QUOTE = '"';
 	private static final char COLON = ':';
+	private static final char TRUE = 'T';
+	private static final char FALSE = 'F';
+	private static final char COMMA_C = ',';
 	
 	static public String toJson(Object obj) throws IllegalArgumentException,
 			IllegalAccessException {
@@ -139,7 +142,22 @@ public class ArrowJson {
 			if(look_ahead.type == TokenType.KEYWORD ){
 				switch (((Keyword)look_ahead).ch) {
 				case '{':
-					String();expect(COLON);expect(QUOTE);FieldValue();expect(QUOTE);expect(BRACE_END);
+					String();expect(COLON);FieldValue();
+					getNextToken();
+					if(look_ahead.type == TokenType.KEYWORD && ((Keyword)look_ahead).ch == ',' ){
+						String();
+						expect(COLON);
+						expect(QUOTE);
+						FieldValue();
+						expect(QUOTE);
+					}else{
+						if(look_ahead.type == TokenType.KEYWORD && ((Keyword)look_ahead).ch != '}' ){
+							throw new RuntimeException("syntax error : expecte char : "+ BRACE_END);
+						}
+					}
+					break;
+				case ',':
+					expect(BRACE_END);
 					break;
 				default:
 					throw new RuntimeException("syntax error ");
@@ -152,18 +170,41 @@ public class ArrowJson {
 		}
 		
 		public void String() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
-			expect(QUOTE);Field();expect(QUOTE);
-//			expect(COLON);expect(QUOTE);FieldValue();expect(QUOTE);
+			Field();
 		}
 		
-		public void FieldValue() throws IllegalArgumentException, IllegalAccessException{
+		public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException{
 			getNextToken();
-			if(look_ahead.type != TokenType.STR){
+			switch (look_ahead.type) {
+			case STR:
+				this.val = ((Str)look_ahead).val;
+				f.setAccessible(true);
+				f.set(result, val);
+				break;
+			case NUM:
+				this.val = ((Num)look_ahead).val;
+				f.setAccessible(true);
+				f.set(result, val);
+				break;
+			case KEYWORD:
+				if(((Keyword)look_ahead).ch == '{'){
+					Object();
+				}else if(((Keyword)look_ahead).ch == TRUE){
+					this.val = ((Num)look_ahead).val;
+					f.setAccessible(true);
+					f.set(result, true);
+				}else if(((Keyword)look_ahead).ch == FALSE){
+					this.val = ((Num)look_ahead).val;
+					f.setAccessible(true);
+					f.set(result, false);
+				}else if(((Keyword)look_ahead).ch == ','){
+					String();expect(COLON);FieldValue();
+				}
+				
+				break;
+			default:
 				throw new RuntimeException("syntax error : expecte field name ");
 			}
-			this.val = ((Str)look_ahead).val;
-			f.setAccessible(true);
-			f.set(result, val);
 		}
 		
 		
@@ -243,20 +284,26 @@ public class ArrowJson {
 					return new Num(TokenType.NUM,temp);
 				}
 				
-				if(current == BRACE_START ||current == BRACE_END||current == QUOTE || current == BRACKET_START ||current == BRACKET_END||current == COLON  ){
+				if(current == BRACE_START ||current == BRACE_END || current == BRACKET_START ||current == BRACKET_END||current == COLON ||current == COMMA_C   ){
 					curentIndex++;
 					return new Keyword(TokenType.KEYWORD,current);
 				}
-				
-				if(Character.isLetter(current)){
-					do{
-						sb.append(current);
-						current = ins[++curentIndex] ;
-					}while(Character.isLetter(current));
-					String outString = sb.toString();
-					sb = new StringBuilder();
-					return new Str(TokenType.STR,outString);
-					
+				if(current == QUOTE){
+					current = ins[++curentIndex] ;
+					if(Character.isLetter(current)){
+						do{
+							sb.append(current);
+							current = ins[++curentIndex] ;
+						}while(Character.isLetter(current));
+						String outString = sb.toString();
+						sb = new StringBuilder();
+						return new Str(TokenType.STR,outString);
+						
+					}else if(current == QUOTE){
+						return new Str(TokenType.STR,"");
+					}else{
+						throw new RuntimeException("syntax error, expect: \" ");
+					}
 				}
 				
 			}
@@ -327,7 +374,7 @@ public class ArrowJson {
 		
 	}
 
-	private static class Person {
+	public static class Person {
 		int age;
 		String name;
 	}
@@ -338,11 +385,12 @@ public class ArrowJson {
 	
 	@Test
 	public void testParser() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
-		String s = "{\"name\" : \"ido\"}"; 
+		String s = "{\"name\" : \"ido\",\"age\" : 10}"; 
 		char[] ins = s.toCharArray();
-		Parser<Student> parser = new Parser<>(ins, Student.class);
-		Student result = parser.Object();
+		Parser<Person> parser = new Parser<>(ins, Person.class);
+		Person result = parser.Object();
 		System.out.print(result.name);
+		System.out.print(result.age);
 		
 	}
 	
@@ -361,7 +409,7 @@ public class ArrowJson {
 		}
 	}
 
-	@Test
+//	@Test
 	public void testSingalObject() throws IllegalArgumentException, IllegalAccessException {
 		Person p = new Person();
 		p.age = 10;
@@ -411,7 +459,7 @@ public class ArrowJson {
 		Address address;
 	}
 	
-	@Test
+//	@Test
 	public void testOjectNested() throws IllegalArgumentException, IllegalAccessException{
 		Department department = new Department();
 		department.person = new Person();
