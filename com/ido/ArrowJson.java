@@ -3,7 +3,6 @@ package hss.isis.gtap.vbs.utils;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Stack;
 
 import org.junit.Test;
 public class ArrowJson {
@@ -24,9 +23,15 @@ public class ArrowJson {
 	private static final char FALSE = 'F';
 	private static final char COMMA_C = ',';
 	
+	static public <T> T toObject(String json,Class<T> clz) throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
+		Parser<T> p = new Parser<T>(json.toCharArray(),clz);
+		T result = p.Object();
+		return result;
+		
+	}
+	
 	static public String toJson(Object obj) throws IllegalArgumentException,
 			IllegalAccessException {
-		
 		
 		Class clz = obj.getClass();
 		if(clz.isArray() || obj instanceof List ){
@@ -70,7 +75,7 @@ public class ArrowJson {
 			if (val instanceof String) {
 				appendQuotation(appendQuotation(sb, f.getName()).append(COLON_S),
 						(String) val).append(COMMA);
-			} else if ( val instanceof Number) {
+			} else if ( val instanceof Number || val instanceof Boolean) {
 				appendQuotation(sb, f.getName()).append(COLON_S).append(val)
 						.append(COMMA);
 			}else {
@@ -84,7 +89,7 @@ public class ArrowJson {
 	}
 	
 	private static StringBuffer removeLastComma(StringBuffer in){
-		StringBuffer result = new StringBuffer(in.subSequence(0, in.length()-2));
+		StringBuffer result = new StringBuffer(in.subSequence(0, in.length()-1));
 		return result;
 	}
 	
@@ -211,12 +216,13 @@ public class ArrowJson {
 					}
 					curObject = subResult;
 					Object();
+				}else if(((Keyword)look_ahead).ch == '['){
+					//TODO handle array parsing
+					
 				}else if(((Keyword)look_ahead).ch == TRUE){
-					this.val = ((Num)look_ahead).val;
 					f.setAccessible(true);
 					f.set(curObject, true);
 				}else if(((Keyword)look_ahead).ch == FALSE){
-					this.val = ((Num)look_ahead).val;
 					f.setAccessible(true);
 					f.set(curObject, false);
 				}else if(((Keyword)look_ahead).ch == ','){
@@ -251,11 +257,6 @@ public class ArrowJson {
 			}
 		}
 		
-		public void Identity(){
-			for(;;){
-				expect(QUOTE);expect(QUOTE);
-			}
-		}
 		
 		
 		private void expect(char ch){
@@ -289,13 +290,6 @@ public class ArrowJson {
 		private static int temp = 0;
 		private static int curentIndex = 0;
 		
-		private Stack<Token> previousTokens = new Stack<>();
-		private Token previousToken ;
-		
-		public  Token getPreviousToken(){
-			return previousToken;
-		}
-		
 		public  void moveAhead(){
 			 curentIndex--;
 		}
@@ -324,14 +318,12 @@ public class ArrowJson {
 					}while(Character.isDigit(current));
 					int result = temp;
 					temp = 0;
-					previousToken = new Num(result);
-					return previousToken;
+					return new Num(result);
 				}
 				
 				if(current == BRACE_START ||current == BRACE_END || current == BRACKET_START ||current == BRACKET_END||current == COLON ||current == COMMA_C   ){
 					curentIndex++;
-					previousToken = new Keyword(current);
-					return previousToken;
+					return  new Keyword(current);
 				}
 				if(current == QUOTE){
 					current = ins[++curentIndex] ;
@@ -345,13 +337,17 @@ public class ArrowJson {
 						}
 						++curentIndex;//skip this "
 						String outString = sb.toString();
-						sb = new StringBuilder();
-						previousToken = new Str(outString);
-						return previousToken;
+						if(outString.equals("true")){
+							return new Keyword(TRUE);
+						}else if(outString.equals("false")){
+							return new Keyword(FALSE);
+						}else{
+							sb = new StringBuilder();
+							return new Str(outString);
+						}
 						
 					}else if(current == QUOTE){
-						previousToken = new Str("");
-						return previousToken;
+						return new Str("");
 					}else{
 						throw new RuntimeException("syntax error, expect: \" ");
 					}
@@ -365,7 +361,6 @@ public class ArrowJson {
 	
 	
 	private static class Token{
-//		 TokenType type;
 		public Token() {
 			super();
 		}
@@ -402,29 +397,12 @@ public class ArrowJson {
 		
 	}
 	
-	private  enum TokenType{
-		NUM("number"),STR("String"),KEYWORD("keyword");
-		
-		private String description;
-
-		private TokenType(String description) {
-			this.description = description;
-		}
-
-		public String getDescription() {
-			return description;
-		}
-
-		
-		
-		
-		
-	}
 
 	public static class Person {
 		int age;
 		String name;
 		String address;
+		boolean male;
 	}
 	
 	public static class Student {
@@ -436,19 +414,11 @@ public class ArrowJson {
 		Person person;
 		
 	}
-//	@Test
-	public void testDelcaredClz(){
-//		Room.class.
-//		Class[] clzs = Room.class.getDeclaredClasses();
-//		for(Class clz : clzs){
-//			System.out.println(clz.getName());
-//		}
-	}
 	
 //	@Test
 	public void testParser() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
 		String s = "{\"name\" : \"ido\",\"age\" : 10}"; 
-		String s2 = "{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\"}"; 
+		String s2 = "{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\", \"male\":\"true\"}"; 
 		char[] ins = s2.toCharArray();
 		Parser<Person> parser = new Parser<>(ins, Person.class);
 		Person result = parser.Object();
@@ -458,16 +428,17 @@ public class ArrowJson {
 		
 	}
 	
-	@Test
+//	@Test
 	public void testNestedObjectParsing() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
-		String s2 = "{\"name\" : \"room1\",\"person\":{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\"}}"; 
+		String s2 = "{\"name\" : \"room1\",\"person\":{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\", \"male\":\"true\"}}"; 
 		char[] ins = s2.toCharArray();
 		Parser<Room> parser = new Parser<>(ins, Room.class);
 		Room result = parser.Object();
 		System.out.println(result.name);
 		System.out.println(result.person.name);
 		System.out.println(result.person.age);
-		System.out.print(result.person.address);
+		System.out.println(result.person.address);
+		System.out.println(result.person.male);
 		
 	}
 	
@@ -488,7 +459,7 @@ public class ArrowJson {
 	public void testSingalObject() throws IllegalArgumentException, IllegalAccessException {
 		Person p = new Person();
 		p.age = 10;
-//		p.name = "dsa";
+		p.name = "dsa";
 
 		System.out.print(ArrowJson.toJson(p));
 	}
@@ -508,7 +479,7 @@ public class ArrowJson {
 		println(ArrowJson.toJson(persons));
 	}
 	
-//	@Test
+	@Test
 	public void testList() throws IllegalArgumentException, IllegalAccessException{
 		ArrayList<Person> list = new ArrayList<Person>(10);
 		for(int j = 0 ; j< 10; j++){
