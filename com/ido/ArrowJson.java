@@ -130,15 +130,22 @@ public class ArrowJson {
 		Class<T> clz;
 		Field f;
 		Object val;
+		Class subClz;
+		Class curClz;
+		Object subResult;
+		Object curObject;
+		private static boolean isOriginalClz = true;
 		public Parser(char[] jsonChars,Class<T> clz) throws InstantiationException, IllegalAccessException {
 			super();
 			this.jsonChars = jsonChars;
 			lexemer = new Lexemer();
 			this.result =clz.newInstance();
 			this.clz = clz;
+			this.curClz = clz;
+			this.curObject = result;
 		}
 
-		public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+		public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
 			expect(BRACE_START);
 			getNextToken();
 			if(look_ahead instanceof Str){
@@ -148,36 +155,13 @@ public class ArrowJson {
 				expect(BRACE_END);
 			}
 			
-			/*getNextToken();
-			if(look_ahead instanceof Keyword ){
-				switch (((Keyword)look_ahead).ch) {
-				case '{':
-					String();expect(COLON);FieldValue();
-					getNextToken();
-					if( ((Keyword)look_ahead).ch == ',' ){
-						String();
-						expect(COLON);
-						FieldValue();
-					}else{
-						if(((Keyword)look_ahead).ch != '}' ){
-							throw new RuntimeException("syntax error : expecte char : "+ BRACE_END);
-						}
-					}
-					break;
-				case ',':
-					expect(BRACE_END);
-					break;
-				default:
-					throw new RuntimeException("syntax error ");
-				}
-			}*/
 			
 			return result;
 			
 				
 		}
 		
-		public void Members() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+		public void Members() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
 			
 			if(look_ahead instanceof Str){
 				Pair();
@@ -194,7 +178,7 @@ public class ArrowJson {
 			
 		}
 		
-		public void Pair() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+		public void Pair() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
 			String();expect(COLON);FieldValue();
 		}
 		
@@ -202,30 +186,41 @@ public class ArrowJson {
 			Field();
 		}
 		
-		public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException{
+		public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
 			getNextToken();
 			if(look_ahead instanceof Str){
 				
 				this.val = ((Str)look_ahead).val;
 				f.setAccessible(true);
-				f.set(result, val);
+				f.set(curObject, val);
 			}else if(look_ahead instanceof Num){
 				this.val = ((Num)look_ahead).val;
 				f.setAccessible(true);
-				f.set(result, val);
+				f.set(curObject, val);
 			}else if(look_ahead instanceof Keyword){
 				if(((Keyword)look_ahead).ch == '{'){
+					moveToPreviousToken();
+					subResult = curClz.newInstance();
+					
+					f.setAccessible(true);
+					if(isOriginalClz){
+						f.set(result, subResult);
+						isOriginalClz = false;
+					}else{
+						f.set(curObject, subResult);
+					}
+					curObject = subResult;
 					Object();
 				}else if(((Keyword)look_ahead).ch == TRUE){
 					this.val = ((Num)look_ahead).val;
 					f.setAccessible(true);
-					f.set(result, true);
+					f.set(curObject, true);
 				}else if(((Keyword)look_ahead).ch == FALSE){
 					this.val = ((Num)look_ahead).val;
 					f.setAccessible(true);
-					f.set(result, false);
+					f.set(curObject, false);
 				}else if(((Keyword)look_ahead).ch == ','){
-					String();expect(COLON);FieldValue();
+					Members();
 				}
 			}else{
 				throw new RuntimeException("syntax error : expecte field name ");
@@ -239,12 +234,14 @@ public class ArrowJson {
 		}
 		
 		public void Field() throws NoSuchFieldException, SecurityException{
-//			getNextToken();
 			if(!(look_ahead instanceof Str)){
 				throw new RuntimeException("syntax error : expecte field name ");
 			}
 			
-			this.f = this.clz.getDeclaredField(((Str)look_ahead).val);
+			this.f = this.curClz.getDeclaredField(((Str)look_ahead).val);
+			if(this.f.getType() != String.class && !this.f.getType().isPrimitive() ){
+				curClz = this.f.getType();
+			}
 			
 		}
 		
@@ -342,9 +339,9 @@ public class ArrowJson {
 						do{
 							sb.append(current);
 							current = ins[++curentIndex] ;
-						}while(Character.isLetter(current) || current == ' ' || current == '\\'  || current == '\n'|| current == '\b'|| current == '\f'|| current == '\r'|| current == '\t'|| current == '\'');
+						}while(Character.isLetter(current) ||Character.isDigit(current) || current == ' ' || current == '\\'  || current == '\n'|| current == '\b'|| current == '\f'|| current == '\r'|| current == '\t'|| current == '\'');
 						if(current != '"'){
-							throw new RuntimeException("syntax error, expect: \" ");
+							throw new RuntimeException("syntax error, expect: \" "+"but get "+current);
 						}
 						++curentIndex;//skip this "
 						String outString = sb.toString();
@@ -434,7 +431,21 @@ public class ArrowJson {
 		private String name;
 	}
 	
-	@Test
+	public static class Room{
+		String name;
+		Person person;
+		
+	}
+//	@Test
+	public void testDelcaredClz(){
+//		Room.class.
+//		Class[] clzs = Room.class.getDeclaredClasses();
+//		for(Class clz : clzs){
+//			System.out.println(clz.getName());
+//		}
+	}
+	
+//	@Test
 	public void testParser() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
 		String s = "{\"name\" : \"ido\",\"age\" : 10}"; 
 		String s2 = "{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\"}"; 
@@ -444,6 +455,19 @@ public class ArrowJson {
 		System.out.println(result.name);
 		System.out.println(result.age);
 		System.out.print(result.address);
+		
+	}
+	
+	@Test
+	public void testNestedObjectParsing() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
+		String s2 = "{\"name\" : \"room1\",\"person\":{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\"}}"; 
+		char[] ins = s2.toCharArray();
+		Parser<Room> parser = new Parser<>(ins, Room.class);
+		Room result = parser.Object();
+		System.out.println(result.name);
+		System.out.println(result.person.name);
+		System.out.println(result.person.age);
+		System.out.print(result.person.address);
 		
 	}
 	
@@ -457,8 +481,6 @@ public class ArrowJson {
 			if(token == null){
 				return;
 			}
-//			String put = "Token type : "+token.type.getDescription()+", Token value " +String.valueOf(token.val);
-//			System.out.println( put);
 		}
 	}
 
@@ -466,7 +488,7 @@ public class ArrowJson {
 	public void testSingalObject() throws IllegalArgumentException, IllegalAccessException {
 		Person p = new Person();
 		p.age = 10;
-//		p.name = nu;
+//		p.name = "dsa";
 
 		System.out.print(ArrowJson.toJson(p));
 	}
