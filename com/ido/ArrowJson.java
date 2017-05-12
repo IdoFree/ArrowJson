@@ -3,6 +3,7 @@ package hss.isis.gtap.vbs.utils;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Stack;
 
 import org.junit.Test;
 public class ArrowJson {
@@ -124,7 +125,7 @@ public class ArrowJson {
 		private static Token look_ahead = null;
 		private char[] jsonChars;
 		Lexemer lexemer;
-		private boolean isRead;
+		private boolean moved;
 		T  result  ;
 		Class<T> clz;
 		Field f;
@@ -138,7 +139,16 @@ public class ArrowJson {
 		}
 
 		public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+			expect(BRACE_START);
 			getNextToken();
+			if(look_ahead instanceof Str){
+				Members();
+				expect(BRACE_END);
+			}else{
+				expect(BRACE_END);
+			}
+			
+			/*getNextToken();
 			if(look_ahead instanceof Keyword ){
 				switch (((Keyword)look_ahead).ch) {
 				case '{':
@@ -160,11 +170,32 @@ public class ArrowJson {
 				default:
 					throw new RuntimeException("syntax error ");
 				}
-			}
+			}*/
 			
 			return result;
 			
 				
+		}
+		
+		public void Members() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+			
+			if(look_ahead instanceof Str){
+				Pair();
+			}
+			getNextToken();
+			if(look_ahead instanceof Keyword){
+				if(((Keyword) look_ahead).ch == ','){
+					
+					getNextToken();
+					Members();
+				}
+			}
+			moveToPreviousToken();
+			
+		}
+		
+		public void Pair() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
+			String();expect(COLON);FieldValue();
 		}
 		
 		public void String() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
@@ -208,7 +239,7 @@ public class ArrowJson {
 		}
 		
 		public void Field() throws NoSuchFieldException, SecurityException{
-			getNextToken();
+//			getNextToken();
 			if(!(look_ahead instanceof Str)){
 				throw new RuntimeException("syntax error : expecte field name ");
 			}
@@ -235,14 +266,21 @@ public class ArrowJson {
 			if(look_ahead instanceof Keyword && ch  == ((Keyword)look_ahead).ch ){
 				
 			}else{
-				throw new RuntimeException("syntax error : expecte char : "+ BRACE_START);
+				throw new RuntimeException("syntax error : expecte char : "+ ch);
 			}
 			
 		}
 		
 		private void getNextToken(){
 			look_ahead = lexemer.getToken(jsonChars);
-			isRead = true;
+			moved = false;
+		}
+		
+		private void moveToPreviousToken(){
+			if(!moved){
+				lexemer.moveAhead();
+				moved = true;
+			}
 		}
 		
 		
@@ -253,6 +291,17 @@ public class ArrowJson {
 		
 		private static int temp = 0;
 		private static int curentIndex = 0;
+		
+		private Stack<Token> previousTokens = new Stack<>();
+		private Token previousToken ;
+		
+		public  Token getPreviousToken(){
+			return previousToken;
+		}
+		
+		public  void moveAhead(){
+			 curentIndex--;
+		}
 		
 		/**
 		 * 
@@ -271,17 +320,21 @@ public class ArrowJson {
 				
 				if(Character.isDigit(current)){
 					do{
-						temp = temp*10 + current;
+						int curenttDigit = Integer.valueOf(String.valueOf(current));
+						
+						temp = temp*10 + curenttDigit;
 						current = ins[++curentIndex] ;
 					}while(Character.isDigit(current));
+					int result = temp;
 					temp = 0;
-					
-					return new Num(temp);
+					previousToken = new Num(result);
+					return previousToken;
 				}
 				
 				if(current == BRACE_START ||current == BRACE_END || current == BRACKET_START ||current == BRACKET_END||current == COLON ||current == COMMA_C   ){
 					curentIndex++;
-					return new Keyword(current);
+					previousToken = new Keyword(current);
+					return previousToken;
 				}
 				if(current == QUOTE){
 					current = ins[++curentIndex] ;
@@ -289,17 +342,19 @@ public class ArrowJson {
 						do{
 							sb.append(current);
 							current = ins[++curentIndex] ;
-						}while(Character.isLetter(current));
+						}while(Character.isLetter(current) || current == ' ' || current == '\\'  || current == '\n'|| current == '\b'|| current == '\f'|| current == '\r'|| current == '\t'|| current == '\'');
 						if(current != '"'){
 							throw new RuntimeException("syntax error, expect: \" ");
 						}
 						++curentIndex;//skip this "
 						String outString = sb.toString();
 						sb = new StringBuilder();
-						return new Str(outString);
+						previousToken = new Str(outString);
+						return previousToken;
 						
 					}else if(current == QUOTE){
-						return new Str("");
+						previousToken = new Str("");
+						return previousToken;
 					}else{
 						throw new RuntimeException("syntax error, expect: \" ");
 					}
@@ -372,6 +427,7 @@ public class ArrowJson {
 	public static class Person {
 		int age;
 		String name;
+		String address;
 	}
 	
 	public static class Student {
@@ -381,11 +437,13 @@ public class ArrowJson {
 	@Test
 	public void testParser() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
 		String s = "{\"name\" : \"ido\",\"age\" : 10}"; 
-		char[] ins = s.toCharArray();
+		String s2 = "{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\"}"; 
+		char[] ins = s2.toCharArray();
 		Parser<Person> parser = new Parser<>(ins, Person.class);
 		Person result = parser.Object();
-		System.out.print(result.name);
-		System.out.print(result.age);
+		System.out.println(result.name);
+		System.out.println(result.age);
+		System.out.print(result.address);
 		
 	}
 	
