@@ -1,9 +1,12 @@
 package hss.isis.gtap.vbs.utils;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.xmlbeans.impl.jam.internal.elements.ArrayClassImpl;
+import org.junit.Assert;
 import org.junit.Test;
 public class ArrowJson {
 	private static String ARRAY_START = "[";
@@ -23,7 +26,7 @@ public class ArrowJson {
 	private static final char FALSE = 'F';
 	private static final char COMMA_C = ',';
 	
-	static public <T> T toObject(String json,Class<T> clz) throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
+	static public <T> T fromJson(String json,Class<T> clz) throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
 		Parser<T> p = new Parser<T>(json.toCharArray(),clz);
 		T result = p.Object();
 		return result;
@@ -126,6 +129,17 @@ public class ArrowJson {
 		
 	}
 	
+	private static String getNameFromArray( Object array){
+		Class clz =  array.getClass();
+		if(!(clz.isArray())){
+			throw new IllegalArgumentException("not a array");
+		}
+		String arrayClassName =  clz.getName();
+		return arrayClassName.substring(2,arrayClassName.length()-1);
+		
+	}
+	
+	
 	private static class Parser<T>{
 		private static Token look_ahead = null;
 		private char[] jsonChars;
@@ -140,11 +154,16 @@ public class ArrowJson {
 		Object subResult;
 		Object curObject;
 		private static boolean isOriginalClz = true;
+		private ArrayList listResult;
 		public Parser(char[] jsonChars,Class<T> clz) throws InstantiationException, IllegalAccessException {
 			super();
 			this.jsonChars = jsonChars;
 			lexemer = new Lexemer();
-			this.result =clz.newInstance();
+			if(clz.isArray()){
+				listResult = new ArrayList<>();
+			}else{
+				this.result =clz.newInstance();
+			}
 			this.clz = clz;
 			this.curClz = clz;
 			this.curObject = result;
@@ -196,12 +215,20 @@ public class ArrowJson {
 			if(look_ahead instanceof Str){
 				
 				this.val = ((Str)look_ahead).val;
-				f.setAccessible(true);
-				f.set(curObject, val);
+				if(curClz.isArray()){
+					listResult.add(val);
+				}else{
+					f.setAccessible(true);
+					f.set(curObject, val);
+				}
 			}else if(look_ahead instanceof Num){
 				this.val = ((Num)look_ahead).val;
-				f.setAccessible(true);
-				f.set(curObject, val);
+				if(curClz.isArray()){
+					listResult.add(val);
+				}else{
+					f.setAccessible(true);
+					f.set(curObject, val);
+				}
 			}else if(look_ahead instanceof Keyword){
 				if(((Keyword)look_ahead).ch == '{'){
 					moveToPreviousToken();
@@ -218,13 +245,22 @@ public class ArrowJson {
 					Object();
 				}else if(((Keyword)look_ahead).ch == '['){
 					//TODO handle array parsing
+					Array();
 					
 				}else if(((Keyword)look_ahead).ch == TRUE){
-					f.setAccessible(true);
-					f.set(curObject, true);
+					if(curClz.isArray()){
+						listResult.add(val);
+					}else{
+						f.setAccessible(true);
+						f.set(curObject, true);
+					}
 				}else if(((Keyword)look_ahead).ch == FALSE){
-					f.setAccessible(true);
-					f.set(curObject, false);
+					if(curClz.isArray()){
+						listResult.add(val);
+					}else{
+						f.setAccessible(true);
+						f.set(curObject, false);
+					}
 				}else if(((Keyword)look_ahead).ch == ','){
 					Members();
 				}
@@ -235,15 +271,20 @@ public class ArrowJson {
 		}
 		
 		
-		public void Number(){
-			
-		}
+		
 		
 		public void Field() throws NoSuchFieldException, SecurityException{
 			if(!(look_ahead instanceof Str)){
 				throw new RuntimeException("syntax error : expecte field name ");
 			}
 			
+			
+			//handle array 
+			if(this.curClz.isArray()){
+//				Object instance = getNameFromArray(curClz);
+//				listResult.add(instance);
+				return;
+			}
 			this.f = this.curClz.getDeclaredField(((Str)look_ahead).val);
 			if(this.f.getType() != String.class && !this.f.getType().isPrimitive() ){
 				curClz = this.f.getType();
@@ -251,10 +292,25 @@ public class ArrowJson {
 			
 		}
 		
-		public void Array(){
-			for(;;){
-				expect(BRACKET_START);expect(BRACKET_END);
+		public void Array() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
+			getNextToken();
+			if(look_ahead instanceof Num ){
+				moveToPreviousToken();
+				FieldValue();
+			}else if(look_ahead instanceof Keyword){
+				if(((Keyword)look_ahead).ch == ','){
+					FieldValue();
+				}else{
+					expect(BRACKET_END);
+				}
 			}
+			/*if(curClz.isArray()){
+				try {
+					Object instance =Class.forName(getNameFromArray(curClz)) ;
+				} catch (ClassNotFoundException e) {
+					throw new RuntimeException(e.getMessage());
+				}
+			}*/
 		}
 		
 		
@@ -264,7 +320,7 @@ public class ArrowJson {
 			if(look_ahead instanceof Keyword && ch  == ((Keyword)look_ahead).ch ){
 				
 			}else{
-				throw new RuntimeException("syntax error : expecte char : "+ ch);
+				throw new RuntimeException("syntax error : expecte char : "+ ch+ "but get "+ ((Keyword)look_ahead).ch);
 			}
 			
 		}
@@ -415,6 +471,18 @@ public class ArrowJson {
 		
 	}
 	
+	@Test
+	public void tsetParseArray() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
+		String s = " {\"nums\" :[2,3,4,5]}"; 
+		char[] ins = s.toCharArray();
+		Parser<String[]> parser = new Parser<>(ins, String[].class);
+		String[] result = parser.Object();
+		
+		for(String string : result){
+			System.out.println(string);
+		}
+	}
+	
 //	@Test
 	public void testParser() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
 		String s = "{\"name\" : \"ido\",\"age\" : 10}"; 
@@ -454,6 +522,43 @@ public class ArrowJson {
 			}
 		}
 	}
+	
+//	@Test
+	public void testGetInstanceFromArray() throws ClassNotFoundException{
+		Address[] addresses = new Address[5];
+		Class clz =  addresses.getClass();
+		System.out.println(clz.getName());
+//		Object result = Class.forName("hss.isis.gtap.vbs.utils.ArrowJson$Address");
+		Object result = Class.forName(getNameFromArray(addresses));
+		System.out.println(getNameFromArray(addresses));
+		
+		
+	}
+	
+	 
+	
+//	@Test
+	public void testArrayClz() throws InstantiationException, IllegalAccessException {
+		Class clz = Address.class;
+		try {
+
+			Address[] aObject = (Address[]) Array.newInstance(clz, 5); // 5 is
+																		// length
+			int length = Array.getLength(aObject); // will be 5
+			for (int i = 0; i < length; i++) {
+				Address ads = new Address();
+				ads.line = "line" + i;
+				Array.set(aObject, i, ads); // set your val here
+			}
+			for (Address address : (Address[]) aObject) {
+				System.out.println(address.line);
+			}
+		} catch (Exception e) {
+
+			e.printStackTrace();
+		}
+
+	}
 
 //	@Test
 	public void testSingalObject() throws IllegalArgumentException, IllegalAccessException {
@@ -479,7 +584,7 @@ public class ArrowJson {
 		println(ArrowJson.toJson(persons));
 	}
 	
-	@Test
+//	@Test
 	public void testList() throws IllegalArgumentException, IllegalAccessException{
 		ArrayList<Person> list = new ArrayList<Person>(10);
 		for(int j = 0 ; j< 10; j++){
