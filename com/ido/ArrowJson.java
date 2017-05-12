@@ -139,19 +139,17 @@ public class ArrowJson {
 
 		public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
 			getNextToken();
-			if(look_ahead.type == TokenType.KEYWORD ){
+			if(look_ahead instanceof Keyword ){
 				switch (((Keyword)look_ahead).ch) {
 				case '{':
 					String();expect(COLON);FieldValue();
 					getNextToken();
-					if(look_ahead.type == TokenType.KEYWORD && ((Keyword)look_ahead).ch == ',' ){
+					if( ((Keyword)look_ahead).ch == ',' ){
 						String();
 						expect(COLON);
-						expect(QUOTE);
 						FieldValue();
-						expect(QUOTE);
 					}else{
-						if(look_ahead.type == TokenType.KEYWORD && ((Keyword)look_ahead).ch != '}' ){
+						if(((Keyword)look_ahead).ch != '}' ){
 							throw new RuntimeException("syntax error : expecte char : "+ BRACE_END);
 						}
 					}
@@ -175,18 +173,16 @@ public class ArrowJson {
 		
 		public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException{
 			getNextToken();
-			switch (look_ahead.type) {
-			case STR:
+			if(look_ahead instanceof Str){
+				
 				this.val = ((Str)look_ahead).val;
 				f.setAccessible(true);
 				f.set(result, val);
-				break;
-			case NUM:
+			}else if(look_ahead instanceof Num){
 				this.val = ((Num)look_ahead).val;
 				f.setAccessible(true);
 				f.set(result, val);
-				break;
-			case KEYWORD:
+			}else if(look_ahead instanceof Keyword){
 				if(((Keyword)look_ahead).ch == '{'){
 					Object();
 				}else if(((Keyword)look_ahead).ch == TRUE){
@@ -200,10 +196,9 @@ public class ArrowJson {
 				}else if(((Keyword)look_ahead).ch == ','){
 					String();expect(COLON);FieldValue();
 				}
-				
-				break;
-			default:
+			}else{
 				throw new RuntimeException("syntax error : expecte field name ");
+			
 			}
 		}
 		
@@ -214,7 +209,7 @@ public class ArrowJson {
 		
 		public void Field() throws NoSuchFieldException, SecurityException{
 			getNextToken();
-			if(look_ahead.type != TokenType.STR){
+			if(!(look_ahead instanceof Str)){
 				throw new RuntimeException("syntax error : expecte field name ");
 			}
 			
@@ -237,7 +232,7 @@ public class ArrowJson {
 		
 		private void expect(char ch){
 			getNextToken();
-			if(look_ahead.type == TokenType.KEYWORD && ch  == ((Keyword)look_ahead).ch ){
+			if(look_ahead instanceof Keyword && ch  == ((Keyword)look_ahead).ch ){
 				
 			}else{
 				throw new RuntimeException("syntax error : expecte char : "+ BRACE_START);
@@ -281,12 +276,12 @@ public class ArrowJson {
 					}while(Character.isDigit(current));
 					temp = 0;
 					
-					return new Num(TokenType.NUM,temp);
+					return new Num(temp);
 				}
 				
 				if(current == BRACE_START ||current == BRACE_END || current == BRACKET_START ||current == BRACKET_END||current == COLON ||current == COMMA_C   ){
 					curentIndex++;
-					return new Keyword(TokenType.KEYWORD,current);
+					return new Keyword(current);
 				}
 				if(current == QUOTE){
 					current = ins[++curentIndex] ;
@@ -295,12 +290,16 @@ public class ArrowJson {
 							sb.append(current);
 							current = ins[++curentIndex] ;
 						}while(Character.isLetter(current));
+						if(current != '"'){
+							throw new RuntimeException("syntax error, expect: \" ");
+						}
+						++curentIndex;//skip this "
 						String outString = sb.toString();
 						sb = new StringBuilder();
-						return new Str(TokenType.STR,outString);
+						return new Str(outString);
 						
 					}else if(current == QUOTE){
-						return new Str(TokenType.STR,"");
+						return new Str("");
 					}else{
 						throw new RuntimeException("syntax error, expect: \" ");
 					}
@@ -314,18 +313,16 @@ public class ArrowJson {
 	
 	
 	private static class Token{
-		 TokenType type;
-		public Token(TokenType type) {
+//		 TokenType type;
+		public Token() {
 			super();
-			this.type = type;
 		}
 		
 	}
 	
 	private static class Keyword extends Token{
 		private char ch;
-		public Keyword(TokenType type,char ch) {
-			super(type);
+		public Keyword(char ch) {
 			this.ch = ch;
 		}
 
@@ -336,8 +333,7 @@ public class ArrowJson {
 	private static class Num extends Token{
 		private int val;
 
-		public Num(TokenType type,int val) {
-			super(type);
+		public Num(int val) {
 			this.val = val;
 		}
 		
@@ -346,8 +342,7 @@ public class ArrowJson {
 	private static class Str extends Token{
 		private String val;
 
-		public Str(TokenType type,String val) {
-			super(type);
+		public Str(String val) {
 			this.val = val;
 		}
 
