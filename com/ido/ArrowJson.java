@@ -8,23 +8,12 @@ import java.util.List;
 import org.apache.xmlbeans.impl.jam.internal.elements.ArrayClassImpl;
 import org.junit.Assert;
 import org.junit.Test;
+
+import hss.isis.gtap.vbs.utils.Lexemer.Token;
 public class ArrowJson {
-	private static String ARRAY_START = "[";
-	private static String ARRAY_END = "]";
-	private static String OBJECT_END = "}";
-	private static String OBJECT_START = "{";
-	private static String COMMA = ",";
-	private static String COLON_S = ":";
 	
-	private static final char BRACE_START = '{';
-	private static final char BRACE_END = '}';
-	private static final char BRACKET_START = '[';
-	private static final char BRACKET_END = ']';
-	private static final char QUOTE = '"';
-	private static final char COLON = ':';
-	private static final char TRUE = 'T';
-	private static final char FALSE = 'F';
-	private static final char COMMA_C = ',';
+	
+	
 	
 	static public <T> T fromJson(String json,Class<T> clz) throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
 		Parser<T> p = new Parser<T>(json.toCharArray(),clz);
@@ -39,34 +28,34 @@ public class ArrowJson {
 		Class clz = obj.getClass();
 		if(clz.isArray() || obj instanceof List ){
 			StringBuffer sb = new StringBuffer();
-			sb.append(ARRAY_START);
+			sb.append(Constants.ARRAY_START);
 			Object[] objArray ;
 			List<Object> objList ;
 			if(clz.isArray()){
 				objArray = (Object[]) obj;
 				for(Object o : objArray){
-					sb.append(getObjectJson(o)).append(COMMA);
+					sb.append(getObjectJson(o)).append(Constants.COMMA);
 				}
 			}else{
 				objList = (List<Object>) obj;
 				for(Object o : objList){
-					sb.append(getObjectJson(o)).append(COMMA);
+					sb.append(getObjectJson(o)).append(Constants.COMMA);
 				}
 			}
 			
-			sb.append(ARRAY_END);
+			sb.append(Constants.ARRAY_END);
 			return sb.toString();
 		}
 		
-		return OBJECT_START+getObjectJson(obj)+OBJECT_END;
+		return Constants.OBJECT_START+getObjectJson(obj)+Constants.OBJECT_END;
 	}
 
 	private static String getObjectJson(Object obj)
 			throws IllegalAccessException {
 		Class clz = obj.getClass();
 		StringBuffer sb = new StringBuffer();
-		appendQuotation(sb, clz.getSimpleName()).append(COLON_S);
-		sb.append(OBJECT_START).append("\n");
+		appendQuotation(sb, clz.getSimpleName()).append(Constants.COLON_S);
+		sb.append(Constants.OBJECT_START).append("\n");
 		Field[] allFileds = clz.getDeclaredFields();
 		for (Field f : allFileds) {
 			f.setAccessible(true);
@@ -76,18 +65,18 @@ public class ArrowJson {
 			}
 			
 			if (val instanceof String) {
-				appendQuotation(appendQuotation(sb, f.getName()).append(COLON_S),
-						(String) val).append(COMMA);
+				appendQuotation(appendQuotation(sb, f.getName()).append(Constants.COLON_S),
+						(String) val).append(Constants.COMMA);
 			} else if ( val instanceof Number || val instanceof Boolean) {
-				appendQuotation(sb, f.getName()).append(COLON_S).append(val)
-						.append(COMMA);
+				appendQuotation(sb, f.getName()).append(Constants.COLON_S).append(val)
+						.append(Constants.COMMA);
 			}else {
-				sb.append((getObjectJson(val))).append(COMMA);
+				sb.append((getObjectJson(val))).append(Constants.COMMA);
 			}
 		}
 		
 		sb = removeLastComma(sb);
-		sb.append("\n").append(OBJECT_END);
+		sb.append("\n").append(Constants.OBJECT_END);
 		return sb.toString();
 	}
 	
@@ -111,23 +100,6 @@ public class ArrowJson {
 		return in;
 	}
 	
-	/**
-	 * 
-	 * @param clz the target object type to create
-	 * @param jsonString the json string 
-	 * @return the initialized target object
-	 * @throws InstantiationException
-	 * @throws IllegalAccessException
-	 */
-	@SuppressWarnings("unchecked")
-	public static <T> T jsonToObject(Class<T> clz,String jsonString) throws InstantiationException, IllegalAccessException{
-		T result = clz.newInstance();
-		
-		Parser parser = new Parser(jsonString.toCharArray(),clz);
-		char[] ins = jsonString.toCharArray();
-		return result;
-		
-	}
 	
 	private static String getNameFromArray( Object array){
 		Class clz =  array.getClass();
@@ -140,318 +112,8 @@ public class ArrowJson {
 	}
 	
 	
-	private static class Parser<T>{
-		private static Token look_ahead = null;
-		private char[] jsonChars;
-		Lexemer lexemer;
-		private boolean moved;
-		T  result  ;
-		Class<T> clz;
-		Field f;
-		Object val;
-		Class subClz;
-		Class curClz;
-		Object subResult;
-		Object curObject;
-		private static boolean isOriginalClz = true;
-		private ArrayList listResult;
-		public Parser(char[] jsonChars,Class<T> clz) throws InstantiationException, IllegalAccessException {
-			super();
-			this.jsonChars = jsonChars;
-			lexemer = new Lexemer();
-			if(clz.isArray()){
-				listResult = new ArrayList<>();
-			}else{
-				this.result =clz.newInstance();
-			}
-			this.clz = clz;
-			this.curClz = clz;
-			this.curObject = result;
-		}
-
-		public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
-			expect(BRACE_START);
-			getNextToken();
-			if(look_ahead instanceof Str){
-				Members();
-				expect(BRACE_END);
-			}else{
-				expect(BRACE_END);
-			}
-			
-			
-			return result;
-			
-				
-		}
-		
-		public void Members() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
-			
-			if(look_ahead instanceof Str){
-				Pair();
-			}
-			getNextToken();
-			if(look_ahead instanceof Keyword){
-				if(((Keyword) look_ahead).ch == ','){
-					
-					getNextToken();
-					Members();
-				}
-			}
-			moveToPreviousToken();
-			
-		}
-		
-		public void Pair() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
-			String();expect(COLON);FieldValue();
-		}
-		
-		public void String() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
-			Field();
-		}
-		
-		public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
-			getNextToken();
-			if(look_ahead instanceof Str){
-				
-				this.val = ((Str)look_ahead).val;
-				if(curClz.isArray()){
-					listResult.add(val);
-				}else{
-					f.setAccessible(true);
-					f.set(curObject, val);
-				}
-			}else if(look_ahead instanceof Num){
-				this.val = ((Num)look_ahead).val;
-				if(curClz.isArray()){
-					listResult.add(val);
-				}else{
-					f.setAccessible(true);
-					f.set(curObject, val);
-				}
-			}else if(look_ahead instanceof Keyword){
-				if(((Keyword)look_ahead).ch == '{'){
-					moveToPreviousToken();
-					subResult = curClz.newInstance();
-					
-					f.setAccessible(true);
-					if(isOriginalClz){
-						f.set(result, subResult);
-						isOriginalClz = false;
-					}else{
-						f.set(curObject, subResult);
-					}
-					curObject = subResult;
-					Object();
-				}else if(((Keyword)look_ahead).ch == '['){
-					//TODO handle array parsing
-					Array();
-					
-				}else if(((Keyword)look_ahead).ch == TRUE){
-					if(curClz.isArray()){
-						listResult.add(val);
-					}else{
-						f.setAccessible(true);
-						f.set(curObject, true);
-					}
-				}else if(((Keyword)look_ahead).ch == FALSE){
-					if(curClz.isArray()){
-						listResult.add(val);
-					}else{
-						f.setAccessible(true);
-						f.set(curObject, false);
-					}
-				}else if(((Keyword)look_ahead).ch == ','){
-					Members();
-				}
-			}else{
-				throw new RuntimeException("syntax error : expecte field name ");
-			
-			}
-		}
-		
-		
-		
-		
-		public void Field() throws NoSuchFieldException, SecurityException{
-			if(!(look_ahead instanceof Str)){
-				throw new RuntimeException("syntax error : expecte field name ");
-			}
-			
-			
-			//handle array 
-			if(this.curClz.isArray()){
-//				Object instance = getNameFromArray(curClz);
-//				listResult.add(instance);
-				return;
-			}
-			this.f = this.curClz.getDeclaredField(((Str)look_ahead).val);
-			if(this.f.getType() != String.class && !this.f.getType().isPrimitive() ){
-				curClz = this.f.getType();
-			}
-			
-		}
-		
-		public void Array() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
-			getNextToken();
-			if(look_ahead instanceof Num ){
-				moveToPreviousToken();
-				FieldValue();
-			}else if(look_ahead instanceof Keyword){
-				if(((Keyword)look_ahead).ch == ','){
-					FieldValue();
-				}else{
-					expect(BRACKET_END);
-				}
-			}
-			/*if(curClz.isArray()){
-				try {
-					Object instance =Class.forName(getNameFromArray(curClz)) ;
-				} catch (ClassNotFoundException e) {
-					throw new RuntimeException(e.getMessage());
-				}
-			}*/
-		}
-		
-		
-		
-		private void expect(char ch){
-			getNextToken();
-			if(look_ahead instanceof Keyword && ch  == ((Keyword)look_ahead).ch ){
-				
-			}else{
-				throw new RuntimeException("syntax error : expecte char : "+ ch+ "but get "+ ((Keyword)look_ahead).ch);
-			}
-			
-		}
-		
-		private void getNextToken(){
-			look_ahead = lexemer.getToken(jsonChars);
-			moved = false;
-		}
-		
-		private void moveToPreviousToken(){
-			if(!moved){
-				lexemer.moveAhead();
-				moved = true;
-			}
-		}
-		
-		
-	}
-	
-	private static class Lexemer{
-		private StringBuilder sb = new StringBuilder();
-		
-		private static int temp = 0;
-		private static int curentIndex = 0;
-		
-		public  void moveAhead(){
-			 curentIndex--;
-		}
-		
-		/**
-		 * 
-		 * @param ins : the json char array
-		 * @return the next token of the json stream
-		 */
-		public  Token getToken(char[] ins){
-			if(ins.length ==  0 ){
-				return null;
-			}
-			for(; curentIndex< ins.length ; curentIndex++){
-				char current = ins[curentIndex] ;
-				if(current == ' ' || current == '\t' || current == '\n' ){
-					continue;
-				}
-				
-				if(Character.isDigit(current)){
-					do{
-						int curenttDigit = Integer.valueOf(String.valueOf(current));
-						
-						temp = temp*10 + curenttDigit;
-						current = ins[++curentIndex] ;
-					}while(Character.isDigit(current));
-					int result = temp;
-					temp = 0;
-					return new Num(result);
-				}
-				
-				if(current == BRACE_START ||current == BRACE_END || current == BRACKET_START ||current == BRACKET_END||current == COLON ||current == COMMA_C   ){
-					curentIndex++;
-					return  new Keyword(current);
-				}
-				if(current == QUOTE){
-					current = ins[++curentIndex] ;
-					if(Character.isLetter(current)){
-						do{
-							sb.append(current);
-							current = ins[++curentIndex] ;
-						}while(Character.isLetter(current) ||Character.isDigit(current) || current == ' ' || current == '\\'  || current == '\n'|| current == '\b'|| current == '\f'|| current == '\r'|| current == '\t'|| current == '\'');
-						if(current != '"'){
-							throw new RuntimeException("syntax error, expect: \" "+"but get "+current);
-						}
-						++curentIndex;//skip this "
-						String outString = sb.toString();
-						if(outString.equals("true")){
-							return new Keyword(TRUE);
-						}else if(outString.equals("false")){
-							return new Keyword(FALSE);
-						}else{
-							sb = new StringBuilder();
-							return new Str(outString);
-						}
-						
-					}else if(current == QUOTE){
-						return new Str("");
-					}else{
-						throw new RuntimeException("syntax error, expect: \" ");
-					}
-				}
-				
-			}
-			
-			return null;
-		}
-	}
 	
 	
-	private static class Token{
-		public Token() {
-			super();
-		}
-		
-	}
-	
-	private static class Keyword extends Token{
-		private char ch;
-		public Keyword(char ch) {
-			this.ch = ch;
-		}
-
-		
-		
-	}
-	
-	private static class Num extends Token{
-		private int val;
-
-		public Num(int val) {
-			this.val = val;
-		}
-		
-	}
-	
-	private static class Str extends Token{
-		private String val;
-
-		public Str(String val) {
-			this.val = val;
-		}
-
-		
-		
-	}
 	
 
 	public static class Person {
@@ -493,6 +155,7 @@ public class ArrowJson {
 		System.out.println(result.name);
 		System.out.println(result.age);
 		System.out.print(result.address);
+		System.out.print(result.male);
 		
 	}
 	
