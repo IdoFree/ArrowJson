@@ -41,8 +41,8 @@ public class Parser<T> {
 	}
 
 	public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
-		expect(Constants.BRACE_START);
 		getNextToken();
+		expect(Constants.BRACE_START);
 		if(look_ahead instanceof Str){
 			Members();
 			expect(Constants.BRACE_END);
@@ -78,11 +78,25 @@ public class Parser<T> {
 	}
 	
 	public void String() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
-		Field();
+		if(!(look_ahead instanceof Str)){
+			throw new RuntimeException("syntax error : expecte field name ");
+		}
+		
+		
+		//handle array 
+		if(this.curClz.isArray()){
+			getNextToken();
+			return;
+		}
+		this.f = this.curClz.getDeclaredField(((Str)look_ahead).val);
+		if(this.f.getType() != String.class && !this.f.getType().isPrimitive() ){
+			curClz = this.f.getType();
+		}
+		getNextToken();
 	}
 	
 	public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
-		getNextToken();
+//		getNextToken();
 		if(look_ahead instanceof Str){
 			
 			this.val = ((Str)look_ahead).val;
@@ -144,26 +158,6 @@ public class Parser<T> {
 	
 	
 	
-	
-	public void Field() throws NoSuchFieldException, SecurityException{
-		if(!(look_ahead instanceof Str)){
-			throw new RuntimeException("syntax error : expecte field name ");
-		}
-		
-		
-		//handle array 
-		if(this.curClz.isArray()){
-//			Object instance = getNameFromArray(curClz);
-//			listResult.add(instance);
-			return;
-		}
-		this.f = this.curClz.getDeclaredField(((Str)look_ahead).val);
-		if(this.f.getType() != String.class && !this.f.getType().isPrimitive() ){
-			curClz = this.f.getType();
-		}
-		
-	}
-	
 	public void Array() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
 		getNextToken();
 		if(look_ahead instanceof Num ){
@@ -197,9 +191,8 @@ public class Parser<T> {
 	
 	
 	private void expect(char ch){
-		getNextToken();
 		if(look_ahead instanceof Keyword && ch  == ((Keyword)look_ahead).ch ){
-			
+			getNextToken();
 		}else{
 			throw new RuntimeException("syntax error : expecte char : "+ ch+ "but get "+ ((Keyword)look_ahead).ch);
 		}
