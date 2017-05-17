@@ -133,14 +133,14 @@ public class ArrowJson {
 		
 	}
 	
-//	@Test
+	@Test
 	public void tsetParseArray() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
 		String s = " {\"nums\" :[2,3,4,5]}"; 
 		char[] ins = s.toCharArray();
-		Parser<String[]> parser = new Parser<>(ins, String[].class);
-		String[] result = parser.Object();
+		Parser<Integer[]> parser = new Parser<>(ins, Integer[].class);
+		Object[] result =  parser.Object();
 		
-		for(String string : result){
+		for(Object string : result){
 			System.out.println(string);
 		}
 	}
@@ -158,8 +158,8 @@ public class ArrowJson {
 		System.out.println(result.male);
 		
 	}
-	
-	@Test
+//	
+//	@Test
 	public void testNestedObjectParsing() throws InstantiationException, IllegalAccessException, NoSuchFieldException, SecurityException, IllegalArgumentException{
 		String s2 = "{\"name\" : \"room1\",\"person\":{\"name\" : \"ido\",\"age\" : 10,\"address\":\"bijiangcun \\\'yanjiangdonglu\", \"male\":\"true\"}}"; 
 		char[] ins = s2.toCharArray();

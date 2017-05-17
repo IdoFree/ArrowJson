@@ -3,6 +3,8 @@ package hss.isis.gtap.vbs.utils;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 
+import org.apache.poi.util.ArrayUtil;
+
 import hss.isis.gtap.vbs.utils.Lexemer.Keyword;
 import hss.isis.gtap.vbs.utils.Lexemer.Num;
 import hss.isis.gtap.vbs.utils.Lexemer.Str;
@@ -43,13 +45,9 @@ public class Parser<T> {
 	public T Object()throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
 		getNextToken();
 		expect(Constants.BRACE_START);
-		if(look_ahead instanceof Str){
-			Members();
-			expect(Constants.BRACE_END);
-		}else{
-			expect(Constants.BRACE_END);
-		}
-		
+		Members();
+		expect(Constants.BRACE_END);
+		moveToPreviousToken();
 		
 		return result;
 		
@@ -62,19 +60,21 @@ public class Parser<T> {
 			Pair();
 		}
 		getNextToken();
-		if(look_ahead instanceof Keyword){
-			if(((Keyword) look_ahead).ch == ','){
-				
-				getNextToken();
-				Members();
+		while(look_ahead instanceof Keyword && ((Keyword) look_ahead).ch == ','){
+			expect(',');
+			if(look_ahead instanceof Str){
+				Pair();
 			}
+			getNextToken();
+			
 		}
-		moveToPreviousToken();
 		
 	}
 	
 	public void Pair() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException, InstantiationException{
-		String();expect(Constants.COLON);FieldValue();
+		String();
+		expect(Constants.COLON);
+		FieldValue();
 	}
 	
 	public void String() throws NoSuchFieldException, SecurityException, IllegalArgumentException, IllegalAccessException{
@@ -82,9 +82,10 @@ public class Parser<T> {
 			throw new RuntimeException("syntax error : expecte field name ");
 		}
 		
-		
 		//handle array 
 		if(this.curClz.isArray()){
+//			this.curClz.getDeclaredFields();
+//			this.f = this.curClz.getDeclaredField(((Str)look_ahead).val);
 			getNextToken();
 			return;
 		}
@@ -96,7 +97,6 @@ public class Parser<T> {
 	}
 	
 	public void FieldValue() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
-//		getNextToken();
 		if(look_ahead instanceof Str){
 			
 			this.val = ((Str)look_ahead).val;
@@ -110,7 +110,6 @@ public class Parser<T> {
 			this.val = ((Num)look_ahead).val;
 			if(curClz.isArray()){
 				listResult.add(val);
-//				getNextToken();
 			}else{
 				f.setAccessible(true);
 				f.set(curObject, val);
@@ -130,7 +129,6 @@ public class Parser<T> {
 				curObject = subResult;
 				Object();
 			}else if(((Keyword)look_ahead).ch == '['){
-				//TODO handle array parsing
 				Array();
 				
 			}else if(((Keyword)look_ahead).ch == Constants.TRUE){
@@ -159,32 +157,26 @@ public class Parser<T> {
 	
 	
 	public void Array() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
-		getNextToken();
-		if(look_ahead instanceof Num ){
-			moveToPreviousToken();
-			FieldValue();
+		expect('[');
+		Elements();
+		if(this.f == null){
+			result =  (T) listResult.toArray();
+			return ;
 		}
-		
-		
-		
-		if(look_ahead instanceof Keyword){
-			if(((Keyword)look_ahead).ch == ','){
-				FieldValue();
-			}else{
-				expect(Constants.BRACKET_END);
-			}
-		}
-		/*if(curClz.isArray()){
-			try {
-				Object instance =Class.forName(getNameFromArray(curClz)) ;
-			} catch (ClassNotFoundException e) {
-				throw new RuntimeException(e.getMessage());
-			}
-		}*/
+		this.f.set(curObject, listResult);
+		expect(']');
+		moveToPreviousToken();
 	}
 	
-	public void Elements(){
+	public void Elements() throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException, SecurityException, InstantiationException{
+		FieldValue();
 		getNextToken();
+		while(look_ahead instanceof Keyword  && ((Keyword)look_ahead).ch == Constants.COMMA_C){
+			expect(',');
+			FieldValue();
+			getNextToken();
+		}
+		
 		
 	}
 	

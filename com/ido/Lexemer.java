@@ -6,9 +6,12 @@ public class Lexemer {
 	
 	private static int temp = 0;
 	private static int curentIndex = 0;
+	private static int preBeginIndex = 0;
+	
 	
 	public  void moveAhead(){
-		 curentIndex--;
+//		 curentIndex--;
+		 curentIndex = preBeginIndex;
 	}
 	
 	/**
@@ -27,6 +30,7 @@ public class Lexemer {
 			}
 			
 			if(Character.isDigit(current)){
+				preBeginIndex = curentIndex;
 				do{
 					int curenttDigit = Integer.valueOf(String.valueOf(current));
 					
@@ -39,10 +43,12 @@ public class Lexemer {
 			}
 			
 			if(current == Constants.BRACE_START ||current == Constants.BRACE_END || current == Constants.BRACKET_START ||current == Constants.BRACKET_END||current == Constants.COLON ||current == Constants.COMMA_C   ){
+				preBeginIndex = curentIndex;
 				curentIndex++;
 				return  new Keyword(current);
 			}
 			if(current == Constants.QUOTE){
+				preBeginIndex = curentIndex;
 				current = ins[++curentIndex] ;
 				if(Character.isLetter(current)){
 					do{
